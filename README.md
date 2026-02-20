@@ -65,13 +65,33 @@ for(int j = 0; j < 10; j++) {
 ```
 
 ### [결과]
-| useServerPrepStmts | cachePrepStmts | avg | min | max | 설명 |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| false | false | 4043.7 | 3536 | 6267 | MySQL에서 항상 새로운 쿼리로 인식 PreparedStatement를 생성하지 않음 |
-| false | true | 4485.7 | 3722 | 5140 | MySQL에서 PreparedStatement를 생성 안함.QueryInfo는 캐싱되기 때문에<br>'cachePrepStmts = false 보다 빠름' |
-| true | false | 6297.5 | 5672 | 7936 | MySQL에서 PreparedStatement를 생성/삭제 시간으로 인해 false/false보다 느려짐 |
-| true | true | 3106.7 | 2473 | 3857 | MySQL에서 PreparedStatment를 생성 후 이후 동일한 쿼리 요청에 대해 캐시를 활용 |
+| useServerPrepStmts | cachePrepStmts | avg | min | max |
+| :--- | :--- | :--- | :--- | :--- |
+| false | false | 4043.7 | 3536 | 6267 |
+| false | true | 4485.7 | 3722 | 5140 |
+| true | false | 6297.5 | 5672 | 7936 |
+| true | true | 3106.7 | 2473 | 3857 |
 
+### [분석]
+* **Client Prepared Statement 사용, Non-Caching**
+  - PreparedStatement를 생성하지 않는다. 매번 쿼리를 파싱해서 전달한다.
 
+* **Client Prepared Statement 사용, Caching**
+  - PreparedStatement를 생성하지 않는다. QueryInfo가 캐싱된다.
+
+* **Server Prepared Statement 사용, Non-Caching**
+  - PreparedStatement를 생성한다. 매 요청마다 객체가 생성 / 삭제되기를 반복한다.
+
+* **Server Prepared Statement 사용, Caching**
+  - PreparedStatment를 생성한 후 이후 동일한 쿼리 요청에 대해 캐시를 활용한다.
+ 
+* 속성값 변경에 대한 무의미한 차이
+  - 즉, PreparedStatement를 생성하고, 파싱하는 과정에 따른 차이는 분명하게 존재하나 그 차이는 미미한 수준이다.
+  또한, 매 요청 마다 객체가 생성 / 삭제를 반복하는 과정이 매 요청에 대해 새로운 객체를 생성하고 캐싱하는 과정보다 비효율적이다.
+* Sever Prepared Statement와 Client Prepared Statement의 성능 차이
+  - 중복된 쿼리에 대한 요청의 경우 매번 쿼리 내부의 정적이 부분과 동적인 부분을 나누어 2회 전송하게 된다.
+  만약 Server Prepared Statment를 사용하였다면 중복된 쿼리 요청을 PreparedStatementId와 함께 동적인 쿼리 부분을 통해 요청하기 때문에 요청횟수가 1회가 된다.  
+ 
 ### 참고 자료
 1. https://tech.kakaopay.com/post/how-preparedstatement-works-in-our-apps/
+
