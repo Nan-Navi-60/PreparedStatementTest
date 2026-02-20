@@ -114,8 +114,7 @@ for(int j = 0; j < 10; j++) {
 | false              | true           | 4485.7   | 3722     | 5140     |
 | true               | false          | 6297.5   | 5672     | 7936     |
 | true               | true           | 3106.7   | 2473     | 3857     |
-
----
+<br>
 
 ## 🧠 분석
 | Client Prepared Statement 사용, Non-Caching | Client Prepared Statement 사용, Caching |
@@ -127,26 +126,37 @@ for(int j = 0; j < 10; j++) {
 | * PreparedStatement를 생성한다.<br>* 매 요청마다 객체가 생성 / 삭제되기를 반복한다. | * PreparedStatement를 생성한 후 <br>동일한 쿼리 요청에 대해 캐시를 활용한다.|
 
 
-### 📌 속성값 변경에 대한 무의미한 차이
-
-PreparedStatement를 생성하고 파싱하는 과정에 따른 차이는 분명 존재하나
-그 차이는 미미한 수준이다.
-
-또한, 매 요청마다 객체 생성 / 삭제를 반복하는 과정은
-매 요청에 대해 새로운 객체를 생성하고 캐싱하는 과정보다 비효율적이다.
 
 
-### 📌 Server Prepared Statement와 Client Prepared Statement의 성능 차이
+---
 
-중복된 쿼리에 대한 요청의 경우:
 
-* 매번 쿼리 내부의 정적 부분과 동적 부분을 나누어 **2회 전송**하게 된다.
+## 📝 실험 결과 요약 및 가설 검증
 
-반면 Server Prepared Statement를 사용하는 경우:
+### :white_check_mark: SQL 파싱 주체 및 캐싱 여부에 따른 성능 분석
+본 실험에서는 Prepared Statement의 생성 위치(**Server vs Client**)와 캐싱 전략에 따라 수행 시간이 각기 다른 양상으로 나타남을 확인하였습니다.
 
-* 중복된 쿼리 요청을 PreparedStatementId와 함께
-* 동적인 쿼리 부분만 전송하여
-* 요청 횟수가 **1회**가 된다.
+* **Server-side Prepared Statement**
+    * **캐싱 활성 시**: SQL 서버 측에 Statement가 생성 및 캐싱되어, 동일 쿼리 요청 시 재사용되므로 수행 시간이 가장 짧고 효율적입니다.
+    * **캐싱 비활성 시**: 클라이언트의 요청마다 Statement 생성과 삭제를 반복하는 과정이 추가되어 수행 시간이 급격히 길어지는 현상을 보였습니다.
+* **Client-side Prepared Statement**
+    * 실험 결과, 오히려 캐싱을 적용했을 때 수행 시간이 더 길게 측정되었습니다. 이를 통해 **CPU가 직접 SQL문을 파싱하여 서버에 전달하는 비용보다, 캐싱 과정에서 발생하는 메모리 참조 오버헤드가 더 크다**는 결론을 도출하였습니다.
+
+<br>
+
+### :white_check_mark: 가설 검증 결과
+
+#### **가설 1: "쿼리의 복잡도가 증가하면 캐시 및 PreparedStatement 사용 여부에 따라 결과 편차가 크게 나타날 것이다."**
+* **검증 결과:**
+  Server와 Client 양측 모두 캐시 사용 여부에 따른 유의미한 편차를 확인하였습니다. 다만, Server 측에서는 캐싱이 성능을 향상시키는 반면, Client 측에서는 오히려 오버헤드로 작용하여 성능 차이가 반대 양상으로 나타남을 확인하였습니다.
+
+#### **가설 2: "JOIN이 포함된 복잡한 쿼리일수록 Server-side Prepared Statement 캐시가 성능 향상에 크게 기여할 것이다."**
+* **검증 결과:**
+  선행 연구의 단순 쿼리 테스트 결과와 비교했을 때, 복잡한 JOIN 쿼리를 사용한 본 실험에서 각 케이스별 성능 편차가 훨씬 두드러지게 나타났습니다.
+
+
+
+> **최종 결론**: 쿼리문이 복잡해질수록 서버의 실행 계획 수립 및 구문 분석 비용이 증가하며, 이를 최적화하는 **서버 측 캐시가 전체 성능에 미치는 영향력 또한 정비례하여 증가함**을 입증하였습니다.
 
 ---
 
@@ -155,3 +165,4 @@ PreparedStatement를 생성하고 파싱하는 과정에 따른 차이는 분명
 1. [https://tech.kakaopay.com/post/how-preparedstatement-works-in-our-apps/](https://tech.kakaopay.com/post/how-preparedstatement-works-in-our-apps/)
 
 ---
+
